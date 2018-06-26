@@ -204,49 +204,28 @@ Será calculada a sensibilidade que é a capacidade de acertar fraude dado que �
 
 Iremos rodar a regressão 5x e tirar a média das sensibilidades:
 
-<<<<<<< HEAD
     ## [1] 0.6385542 0.5365854 0.6206897 0.6206897 0.6756757
 
 A sensibilidade para regressão logistica será a média das 5x:
 
     ## [1] 0.6184389
-=======
-    ## [1] 0.7123288 0.6315789 0.6315789 0.6760563 0.6250000
-
-A sensibilidade para regressão logistica será a média das 5x:
-
-    ## [1] 0.6553086
->>>>>>> 54c44e27e43172b608e5ef843db43d76a4ef24e7
 
 ### Adaboosting
 
 Podemos ver os pesos para cada árvore:
 
-<<<<<<< HEAD
     ## [1] 3.823449 3.295894 3.002821 3.023511 2.781831
-=======
-    ## [1] 3.846993 3.252415 3.260238 2.991518 2.702745
->>>>>>> 54c44e27e43172b608e5ef843db43d76a4ef24e7
 
 E olhar a matriz de confusão:
 
     ##    
     ##         0     1
-<<<<<<< HEAD
     ##   0 45483     3
     ##   1    17    66
 
 Dessa maneira podemos calcular a sensibilidade:
 
     ## [1] 0.7951807
-=======
-    ##   0 45485     4
-    ##   1    17    63
-
-Dessa maneira podemos calcular a sensibilidade:
-
-    ## [1] 0.7875
->>>>>>> 54c44e27e43172b608e5ef843db43d76a4ef24e7
 
 ### Redes Neurais
 
@@ -257,7 +236,6 @@ Em seguida rodaremos o modelo com a base treino e faremos o predict com a base v
 Tabela com resultados:
 
     ## # weights:  299
-<<<<<<< HEAD
     ## initial  value 94306.403673 
     ## iter  10 value 638.095073
     ## iter  20 value 637.193192
@@ -280,45 +258,14 @@ Tabela com resultados:
     ## iter 190 value 245.798736
     ## iter 200 value 220.560719
     ## final  value 220.560719 
-=======
-    ## initial  value 105161.645352 
-    ## iter  10 value 684.547534
-    ## iter  20 value 645.979427
-    ## iter  30 value 638.971563
-    ## iter  40 value 636.915177
-    ## iter  50 value 636.891583
-    ## iter  60 value 634.406553
-    ## iter  70 value 559.093521
-    ## iter  80 value 353.760615
-    ## iter  90 value 214.222724
-    ## iter 100 value 209.393254
-    ## iter 110 value 206.082572
-    ## iter 120 value 198.006829
-    ## iter 130 value 190.130156
-    ## iter 140 value 184.846620
-    ## iter 150 value 182.516750
-    ## iter 160 value 180.876038
-    ## iter 170 value 179.111093
-    ## iter 180 value 177.807157
-    ## iter 190 value 175.813257
-    ## iter 200 value 174.426538
-    ## final  value 174.426538 
->>>>>>> 54c44e27e43172b608e5ef843db43d76a4ef24e7
     ## stopped after 200 iterations
 
     ##    
     ##         0     1
-<<<<<<< HEAD
     ##   0 45479     5
     ##   1    18    66
 
     ## [1] 0.7857143
-=======
-    ##   0 45472    13
-    ##   1    22    61
-
-    ## [1] 0.7349398
->>>>>>> 54c44e27e43172b608e5ef843db43d76a4ef24e7
 
 Podemos plotar a rede:
 
@@ -333,28 +280,16 @@ Encontramos as seguintes sensibilidades:
 sensibilidade_reglog
 ```
 
-<<<<<<< HEAD
     ## [1] 0.6184389
-=======
-    ## [1] 0.6553086
->>>>>>> 54c44e27e43172b608e5ef843db43d76a4ef24e7
 
 ``` r
 sensibilidade_adaboosting
 ```
 
-<<<<<<< HEAD
     ## [1] 0.7951807
-=======
-    ## [1] 0.7875
->>>>>>> 54c44e27e43172b608e5ef843db43d76a4ef24e7
 
 ``` r
 sensibilidade_nnet
 ```
 
-<<<<<<< HEAD
     ## [1] 0.7857143
-=======
-    ## [1] 0.7349398
->>>>>>> 54c44e27e43172b608e5ef843db43d76a4ef24e7

@@ -1,0 +1,291 @@
+---
+title: "Análise Fraude"
+author: "Sayuri Takeda"
+date: "Junho de 2018"
+output:
+    github_document:
+      toc: true
+      toc_depth: 3
+---
+
+```{r include=FALSE}
+library(devtools)
+source_url('https://gist.githubusercontent.com/fawda123/7471137/raw/466c1474d0a505ff044412703516c34f1a4684a5/nnet_plot_update.r')
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(magrittr)
+library(tabplot)
+library(classInt)
+library(tidyr)
+library(formattable)
+library(caret)
+library(e1071)
+library(fastAdaboost)
+library(nnet)
+```
+
+# Objetivo 
+
+O objetivo deste trabalho será detectar fraudes na base Credit Card Fraud Detection do [Kaggle](https://www.kaggle.com/mlg-ulb/creditcardfraud) demonstrando alguns classificadores.
+
+# Metodologia
+
+Inicialmente iremos fazer uma análise exploratória dos dados afim de estudar como a base se comporta.
+
+Em seguida iremos rodar os algoritmos regressão logistica, redes neurais e adaboosting calculando a sensibilidade para cada método, lembrando que, quanto **maior a sensibidade** melhor. 
+
+## Análise exploratória
+
+A base contém 31 colunas, sendo a coluna Time os segundos no período de 2 dias.
+
+```{r echo=FALSE}
+# o tempo sao os segundos no período de 2 dias 
+#base <- read.csv("C:\\Users\\ptakeda\\Desktop\\creditcard.csv")
+base <- read.csv("./creditcard.csv")
+head(base)
+```
+
+A base é bem desbalanceada, apenas 0.17% da base são fraudes.  
+
+Abaixo segue tabela com montante em classes e percentual de fraudes para cada classe: 
+
+```{r echo=FALSE}
+# transformar Class em factor e dividir Amount em grupos para gerar tabplot 
+base$Class_factor <- base$Class %>% as.factor()
+base$Amount_fac <- num2fac(base$Amount)
+# tabela 
+base_perc_fraudes <- xtabs(~base$Amount_fac + base$Class, data = base)
+base_perc_fraudes %<>% as.data.frame
+base_perc_fraudes %<>% spread(base.Class, Freq)
+base_perc_fraudes  %<>% mutate(percentual_fraudes = (base_perc_fraudes$'1' / base_perc_fraudes$'0')*100)
+base_perc_fraudes %<>% rename(montante_classe = base.Amount_fac)  
+formattable::formattable(base_perc_fraudes, list(percentual_fraudes = color_tile("white", "orange")))
+```
+
+Podemos perceber que 0,29% das fraudes ocorrem em valores entre 1.000 e 10.000.
+
+Com o seguinte gráfico podemos inferir que existem menos fraudes no começo dos dias:
+
+```{r echo=FALSE}
+# começo do dia tem menos transações
+base_grafico <- base %>% 
+  group_by(Time) %>% 
+  summarise(qtd_agrupada_transacoes = n(), Montante = sum(Amount))
+
+base_grafico %>% 
+  ggplot(aes(Time, qtd_agrupada_transacoes)) +
+  geom_point(aes(size = Montante))
+```
+
+Agora tentaremos encontrar algum padrão:
+
+Podemos perceber que nenhuma variável segue o tempo:
+
+```{r echo=FALSE}
+base %<>% select(-Class_factor, -Amount_fac) # retira as var que criei para os gráficos
+# não segue padrão com o tempo
+tabplot::tableplot(base) 
+```
+
+Algumas variáveis seguem V1:
+
+```{r echo=FALSE}
+# alguns seguem o padrão do V1
+tabplot::tableplot(base, sortCol = V1) 
+```
+
+Plotando o gráfico abaixo podemos perceber que ao longo do tempo (segundos) existem alguns picos mas a maior parte das ocorrencias são iguais a 1, ou seja, as fraudes aparentemente estão bem distribuidas:
+
+```{r echo=FALSE}
+base %>% 
+  group_by(Time) %>% 
+  summarise("sum_fraudes" = sum(Class)) %>% 
+  ggplot(aes(Time, sum_fraudes)) + 
+  geom_col(colour = "#79a6d2") + 
+  labs(x = "Tempo", y = "Quantidade fraudes")
+```
+
+## Modelagem 
+
+Iremos separar em treino e teste.
+
+```{r}
+treino <- createDataPartition(y = base$Class, p =0.80, list = F)
+base_treino_inteira <- base[treino,]
+base_teste <- base[-treino,]
+```
+
+A base_treino_inteira que contém 80% dos dados será dividida em treino e validação e o teste será rodado apenas no fim de tudo.
+
+```{r}
+inTrain <- createDataPartition(y = base_treino_inteira$Class, p =0.80, list = F)
+base_treino <- base_treino_inteira[inTrain,]
+base_validacao <- base_treino_inteira[-inTrain,]
+```
+
+Será calculada a sensibilidade que é a capacidade de acertar fraude dado que é fraude, ou seja, são os positivos verdadeiros dividido pela soma dos positivos verdadeiros mais positivos falsos.
+
+### Regressão Logistica 
+
+Iremos rodar a regressão 5x e tirar a média das sensibilidades:
+
+```{r echo=FALSE, warning=FALSE}
+base_sensibilidade_reglog <- data.frame("sensibilidade" = 0)
+
+for (i in 1:5) {
+  # separa 80% para treino e 20% para validação
+  inTrain <- createDataPartition(y = base_treino_inteira$Class, p =0.80, list = F)
+  
+  base_treino <- base_treino_inteira[inTrain,] 
+  base_validacao <- base_treino_inteira[-inTrain,]
+  
+  # respostas da base treino e onde serao inseridos os outputs para os predicts
+  base_respostas <- base_validacao %>% select(Class_verdadeira = Class)
+  
+  base_validacao %<>% select(-Class)
+  
+  # gera o modelo para regressão logistica com o treino
+  modelo <- base_treino %>% glm(formula = Class ~ . , family = "binomial")
+  # faz o predict com o teste
+  predict_output <- predict(modelo, newdata = base_validacao, type = "response")
+  # insere os resultados do predict na base respostas
+  # inserir em prob pra fazer o bagging depois (prob > 0.5 é considerado fraude)
+  base_respostas %<>% cbind(predict_reglog_prob = predict_output)
+  base_respostas %<>% cbind(predict_reglog = factor(with(base_respostas,ifelse((base_respostas$predict_reglog  > 0.5),1,0))))
+  tab <- table(base_respostas$Class_verdadeira, base_respostas$predict_reglog)
+  # quero diminuir os falsos positivos
+  #accuracia <- (tab[1] + tab[4]) / sum(tab)
+  sensibilidade <- tab[4] / (tab[2] + tab[4])
+  
+  # guardar na base para retirar a média
+  base_sensibilidade_reglog <- rbind(base_sensibilidade_reglog, sensibilidade)
+}
+
+base_sensibilidade_reglog <- base_sensibilidade_reglog[-1,1]
+base_sensibilidade_reglog
+```
+
+A sensibilidade para regressão logistica será a média das 5x:
+
+```{r echo=FALSE}
+sensibilidade_reglog <- mean(base_sensibilidade_reglog)
+sensibilidade_reglog
+```
+
+### Adaboosting
+
+Podemos ver os pesos para cada árvore: 
+
+```{r echo=FALSE}
+inTrain <- createDataPartition(y = base_treino_inteira$Class, p =0.80, list = F)
+base_treino <- base_treino_inteira[inTrain,] 
+base_validacao <- base_treino_inteira[-inTrain,]
+
+base_respostas <- base_validacao$Class
+base_respostas %<>% as.data.frame()
+names(base_respostas) <- "resposta_verdadeira"
+
+modelo <- adaboost(formula = Class ~ . , data = base_treino, nIter = 5)
+modelo$weights
+```
+
+E olhar a matriz de confusão:
+
+```{r echo=FALSE}
+predict_output <- predict(modelo, newdata = base_validacao)
+# insere os resultados do predict na base respostas
+base_respostas %<>% cbind(predict_adaboost = predict_output$class)
+# inserir em prob pra fazer o bagging depois (prob > 0.5 é considerado fraude)
+base_respostas %<>% cbind(predict_adaboost_prob = predict_output$prob[,2])
+tab <- table(base_respostas$resposta_verdadeira, base_respostas$predict_adaboost)
+tab
+```
+
+Dessa maneira podemos calcular a sensibilidade:
+
+```{r echo=FALSE, warning=FALSE}
+sensibilidade_adaboosting <- tab[4] / (tab[2] + tab[4])
+sensibilidade_adaboosting
+```
+
+
+### Redes Neurais 
+
+Primeiro faremos uma feature engineering, criaremos uma coluna para `classe 0` e outra para `classe 1`, quando ocorrer a fraude a linha da coluna `classe 1` irá conter o valor 1.
+
+Em seguida rodaremos o modelo com a base treino e faremos o predict com a base validação para calcularmos a sensibilidade.
+
+```{r include=FALSE}
+#como não vamos rodar outro modelo após esse, podemos modificar a base_treino_inteira
+base_treino_inteira$Class %<>% as.factor() 
+
+base_treino_inteira %<>% mutate(Class_0 = ifelse(Class == 0, 1, 0))
+base_treino_inteira %<>% mutate(Class_1 = ifelse(Class == 1, 1, 0))
+
+base_treino_inteira %<>% select(-Class)
+```
+
+Tabela com resultados:
+
+```{r echo=FALSE}
+inTrain <- createDataPartition(y = base_treino_inteira$Amount, p =0.80, list = F)
+base_treino <- base_treino_inteira[inTrain,]
+base_validacao <- base_treino_inteira[-inTrain,]
+
+# base treino sem as respostas
+base_treino_x <- base_treino %>% select(-c(Class_0,Class_1))
+# somente as respostas do treino
+base_treino_y <- base_treino %>% select(c(Class_0,Class_1))
+
+#modelo <- nnet(x = base_treino_x, y = base_treino_y, 
+#               size = 8, rang = (1/sqrt(28)), maxit = 2000)
+
+modelo <- nnet(x = base_treino_x, y = base_treino_y, size = 9, rang = 0.1,
+               decay = 5e-4, maxit = 200)
+
+base_validacao_respostas <- base_validacao %>% select(Class_1) # só class 1 dá 
+base_validacao %<>% select(-c(Class_0,Class_1)) # validação não tem resposta
+
+predict_nnet <- predict(modelo, base_validacao)
+predict_nnet %<>% as.data.frame()
+predict_nnet %<>% mutate(resultado = ifelse(predict_nnet$Class_1 > 0.5,1,0))
+#predict_nnet %<>% as.data.frame() %>% select(Class_1)
+predict_nnet$base_validacao_resp <- base_validacao_respostas$Class_1
+
+tab <- table(base_validacao_respostas$Class_1, predict_nnet$resultado)
+tab
+#nrow(base_validacao_respostas %>% filter(Class_1 == 1))
+
+sensibilidade_nnet <- tab[4] / (tab[2] + tab[4])
+sensibilidade_nnet
+
+```
+
+Podemos plotar a rede:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+plot.nnet(modelo)
+```
+
+
+# Conclusão
+
+Encontramos as seguintes sensibilidades: 
+
+```{r}
+sensibilidade_reglog
+```
+
+```{r}
+sensibilidade_adaboosting
+```
+
+```{r}
+sensibilidade_nnet
+```
+
+
+
+
+
